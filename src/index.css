@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-cursive: "Dancing Script", cursive;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-parchment-light: #FDFBF7;
+  --color-parchment-dark: #F4F1EA;
+  --color-parchment-tint: #EAE6DF;
+  --color-legal-black: #1A1A1A;
+  --color-charcoal: #2C2C2C;
+  --color-coffee: #5C4033;
+  --color-forest: #27AE60;
+  --color-sienna: #D35400;
+}
+
+/* Class utilities for physical textured paper and custom document layout overlays */
+.parchment-paper {
+  background-color: #FDFBF7;
+  background-image: radial-gradient(rgba(92, 64, 51, 0.03) 1px, transparent 1px),
+                    radial-gradient(rgba(92, 64, 51, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.legal-margin-line {
+  border-left: 1px double rgba(92, 64, 51, 0.15);
+}
+
+/* Scrollbar styling matching natural theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F4F1EA;
+}
+::-webkit-scrollbar-thumb {
+  background: #D3C2B5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B6A293;
+}
+
