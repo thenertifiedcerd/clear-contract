@@ -1,20 +1,13 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ClearContract
 
-# Run and deploy your AI Studio app
+ClearContract is a React and Vite app for scanning, pasting, and reviewing contract text with OCR support, optional Firebase-backed persistence, and streamed AI analysis.
 
-This contains everything you need to run your app locally.
+## Run locally
 
-View your app in AI Studio: https://ai.studio/apps/404a2931-977e-4185-a908-ace13ca2d8a8
+1. Install dependencies with `npm install`.
+2. Create a `.env` file from `.env.example` and set the OpenRouter and Firebase values you want to use.
+3. Start the dev server with `npm run dev`.
 
-## Run Locally
+## Build
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Use `npm run build` to produce the production client bundle and server output.
