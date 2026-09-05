@@ -8,7 +8,8 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HMR_PORT = Number(process.env.VITE_HMR_PORT || 24679);
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "google/gemma-4-26b-a4b-it:free";
+const OPENROUTER_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free";
+const EXPLABS_DEFAULT_MODEL = "gpt-6-astra";
 
 // Set up larger limits to accept photo uploads seamlessly
 app.use(express.json({ limit: "15mb" }));
@@ -149,17 +150,47 @@ function hasRealValue(value?: string) {
   return Boolean(value && !value.startsWith("MY_") && !value.startsWith("REPLACE_"));
 }
 
-function getOpenRouterApiKey() {
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+interface AiProviderConfig {
+  apiKey: string;
+  endpoint: string;
+  model: string;
+  providerName: "openrouter" | "experiential";
+}
+
+function getConfiguredApiKey() {
+  const apiKey = process.env.EXPLABS_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
   if (!hasRealValue(apiKey)) {
     return null;
   }
   return apiKey || null;
 }
 
-function getOpenRouterHeaders() {
+function getAiProviderConfig(): AiProviderConfig | null {
+  const apiKey = getConfiguredApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  if (apiKey.startsWith("xpl_")) {
+    return {
+      apiKey,
+      endpoint: "https://api.experientiallabs.ai/v1/chat/completions",
+      model: process.env.EXPLABS_MODEL || process.env.OPENROUTER_MODEL || EXPLABS_DEFAULT_MODEL,
+      providerName: "experiential",
+    };
+  }
+
+  return {
+    apiKey,
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    model: process.env.OPENROUTER_MODEL || OPENROUTER_DEFAULT_MODEL,
+    providerName: "openrouter",
+  };
+}
+
+function getAiHeaders(apiKey: string) {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${getOpenRouterApiKey()}`,
+    Authorization: "Bearer " + apiKey,
     "Content-Type": "application/json",
     "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
     "X-Title": "ClearContract",
@@ -203,21 +234,16 @@ function extractJsonObject(text: string) {
 }
 
 async function callOpenRouter(messages: Array<{ role: string; content: string }>) {
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
-    throw new Error("OpenRouter API key is not configured.");
+  const providerConfig = getAiProviderConfig();
+  if (!providerConfig) {
+    throw new Error("No AI provider API key is configured.");
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch(providerConfig.endpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
-      "X-Title": "ClearContract",
-    },
+    headers: getAiHeaders(providerConfig.apiKey),
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model: providerConfig.model,
       messages,
       stream: false,
       temperature: 0.2,
@@ -226,7 +252,7 @@ async function callOpenRouter(messages: Array<{ role: string; content: string }>
 
   const rawText = await response.text();
   if (!response.ok) {
-    throw new Error(`OpenRouter request failed (${response.status}): ${rawText}`);
+    throw new Error(`${providerConfig.providerName} request failed (${response.status}): ${rawText}`);
   }
 
   const payload = JSON.parse(rawText) as {
@@ -235,28 +261,23 @@ async function callOpenRouter(messages: Array<{ role: string; content: string }>
 
   const content = payload.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error("OpenRouter response did not include assistant content.");
+    throw new Error(`${providerConfig.providerName} response did not include assistant content.`);
   }
 
   return content;
 }
 
 async function streamOpenRouter(messages: Array<{ role: string; content: string }>) {
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
-    throw new Error("OpenRouter API key is not configured.");
+  const providerConfig = getAiProviderConfig();
+  if (!providerConfig) {
+    throw new Error("No AI provider API key is configured.");
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch(providerConfig.endpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
-      "X-Title": "ClearContract",
-    },
+    headers: getAiHeaders(providerConfig.apiKey),
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model: providerConfig.model,
       messages,
       stream: true,
       temperature: 0.2,
@@ -265,7 +286,7 @@ async function streamOpenRouter(messages: Array<{ role: string; content: string 
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenRouter request failed (${response.status}): ${errorText}`);
+    throw new Error(`${providerConfig.providerName} request failed (${response.status}): ${errorText}`);
   }
 
   if (!response.body) {
@@ -295,13 +316,13 @@ app.post("/api/analyze", async (req, res) => {
   }
 
   // Check if we have a real Gemini client
-  const openRouterApiKey = getOpenRouterApiKey();
-  if (!openRouterApiKey) {
-    console.log("No OpenRouter API key available. Returning analysis error.");
+  const aiProviderConfig = getAiProviderConfig();
+  if (!aiProviderConfig) {
+    console.log("No AI provider key available. Returning analysis error.");
     return res.status(503).json({
       success: false,
-      error: "OpenRouter API key is not configured.",
-      details: "Add a valid OPENROUTER_API_KEY (or GEMINI_API_KEY for legacy support) to enable live analysis."
+      error: "AI provider API key is not configured.",
+      details: "Add a valid OPENROUTER_API_KEY (or GEMINI_API_KEY), or an xpl_ key via EXPLABS_API_KEY/OPENROUTER_API_KEY, to enable live analysis."
     });
   }
 
@@ -364,11 +385,11 @@ app.post("/api/chat", async (req, res) => {
 
   console.log(`Received user query inside contract chat: "${userMessage.substring(0, 50)}..."`);
 
-  const openRouterApiKey = getOpenRouterApiKey();
-  if (!openRouterApiKey) {
+  const aiProviderConfig = getAiProviderConfig();
+  if (!aiProviderConfig) {
     // Elegant fallback simulation chat
     setTimeout(() => {
-      let replyText = "I’d be happy to check that for you! However, please configure your OPENROUTER_API_KEY so I can run live checks on your custom queries. Based on local safety heuristics, you should ensure payment terms require client check-out within 10 days.";
+      let replyText = "I’d be happy to check that for you! However, please configure your AI API key (OPENROUTER_API_KEY, GEMINI_API_KEY, or xpl_ via EXPLABS_API_KEY) so I can run live checks on your custom queries. Based on local safety heuristics, you should ensure payment terms require client check-out within 10 days.";
       
       const promptLower = userMessage.toLowerCase();
       if (promptLower.includes("terminate") || promptLower.includes("cancel")) {
@@ -441,12 +462,12 @@ app.post("/api/chat/stream", async (req, res) => {
   const userMessage = messages[messages.length - 1]?.text || "";
   console.log(`Received streaming user query inside contract chat: "${userMessage.substring(0, 50)}..."`);
 
-  const openRouterApiKey = getOpenRouterApiKey();
-  if (!openRouterApiKey) {
+  const aiProviderConfig = getAiProviderConfig();
+  if (!aiProviderConfig) {
     return res.status(503).json({
       success: false,
-      error: "OpenRouter API key is not configured.",
-      details: "Add a valid OPENROUTER_API_KEY to enable live streaming chat."
+      error: "AI provider API key is not configured.",
+      details: "Add a valid OPENROUTER_API_KEY (or GEMINI_API_KEY), or an xpl_ key via EXPLABS_API_KEY/OPENROUTER_API_KEY, to enable live streaming chat."
     });
   }
 

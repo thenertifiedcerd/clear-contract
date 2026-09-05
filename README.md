@@ -5,7 +5,7 @@ ClearContract is a React and Vite app for scanning, pasting, and reviewing contr
 ## Run locally
 
 1. Install dependencies with `npm install`.
-2. Create a `.env` file from `.env.example` and set the OpenRouter and Firebase values you want to use.
+2. Create a `.env` file from `.env.example` and set the AI provider and Firebase values you want to use (`OPENROUTER_API_KEY` / `GEMINI_API_KEY`, or an `xpl_` key via `EXPLABS_API_KEY`).
 3. Start the dev server with `npm run dev`.
 
 ## Build
